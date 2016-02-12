@@ -1,0 +1,7 @@
+name = Content Access Simple UI
+description = Provides a simpler user interface for Content Access when "per content access control" is enabled.
+core = 7.x
+
+package = Access control
+
+dependencies[] = content_access

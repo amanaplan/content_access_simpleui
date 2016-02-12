@@ -1,0 +1,115 @@
+<?php
+
+/**
+ * @file
+ * Provides a simpler user interface for Content Access when
+ * "per content access control" is enabled.
+ */
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ *
+ * Adds UI/UX improvements to the content access control per node form.
+ */
+function content_access_simpleui_form_content_access_page_alter(&$form, &$form_state, $form_id) {
+  // Add styles to add support to sites with 25+ configured roles
+  // and support for the changes made this form's configuration.
+  drupal_add_css(
+    drupal_get_path('module', 'content_access_simpleui') . '/content_access_simpleui.css',
+    array('group' => CSS_DEFAULT, 'every_page' => FALSE)
+  );
+
+  // Get the node's type (bundle) name and convert it to lowercase.
+  $content_type_name = node_type_get_name($form_state['node']->type);
+  $content_type_name = drupal_strtolower($content_type_name);
+
+  // Change the fieldset's title and description to better reflect
+  // the form's functionality and behavior.
+  $form['per_role']['#title'] = t('User Roles');
+  $form['per_role']['#description'] =  t(
+    'Select the user roles allowed to view, edit, and/or delete this %content_type.',
+    array('%content_type' => $content_type_name)
+  );
+
+  // Hide the view_own, update_own, and delete_own permissions.
+  // (These permissions may be confusing to users, and they aren't
+  //  necessary when editing a node's role-based access controls.)
+  $form['per_role']['view_own']['#access'] = FALSE;
+  $form['per_role']['update_own']['#access'] = FALSE;
+  $form['per_role']['delete_own']['#access'] = FALSE;
+
+  // Change the titles of the view, update, and delete permissions
+  // to better reflect the form's functionality and behavior.
+  $form['per_role']['view']['#title'] = t('View this %content_type', array('%content_type' => $content_type_name));
+  $form['per_role']['update']['#title'] = t('Edit this %content_type', array('%content_type' => $content_type_name));
+  $form['per_role']['delete']['#title'] = t('Delete this %content_type', array('%content_type' => $content_type_name));
+
+  // Change the #after_build callback to the one included in this module.
+  $form['per_role']['#after_build'][] = 'content_access_simpleui_force_permissions';
+
+  // Change the reset submit callback to the one included in this module.
+  $form['reset']['#submit'] = array('content_access_simpleui_page_reset');
+}
+
+/**
+ * Implements hook_menu_alter().
+ *
+ * Changes the access callback for 'node/%node/access' to a custom callback
+ * with additional behavior.
+ */
+function content_access_simpleui_menu_alter(&$items) {
+  $items['node/%node/access']['access callback'] = 'content_access_simpleui_content_access_node_page_access';
+}
+
+/**
+ * Custom form #after_build callback.
+ *
+ * Disables checkboxes for roles granted global access to the content type.
+ */
+function content_access_simpleui_force_permissions($element, &$form_state) {
+  foreach (array('view', 'view_own') as $op) {
+    foreach (content_access_get_settings($op, $form_state['node']->type) as $rid) {
+      $element[$op][$rid]['#disabled'] = TRUE;
+      $element[$op][$rid]['#attributes']['disabled'] = 'disabled';
+      $element[$op][$rid]['#value'] = TRUE;
+      $element[$op][$rid]['#checked'] = TRUE;
+      $element[$op][$rid]['#prefix'] = '<span' . drupal_attributes(array('title' => t("Permission is granted due to the content type's access control settings."))) . '>';
+      $element[$op][$rid]['#suffix'] = "</span>";
+    }
+  }
+  return $element;
+}
+
+/**
+ * Custom form submit callback.
+ *
+ * Customized version of content_access's content_access_page_reset
+ * submit callback. This version correct the message by correcting 'reseted'
+ * to 'reset'.
+ *  
+ * @todo Once the Drupal.org Patch content_access and remove function
+ *   and reference to it in cls_content_form_content_access_page_alter().
+ * @link https://www.drupal.org/node/2310557 
+ */
+function content_access_simpleui_page_reset($form, &$form_state) {
+  content_access_delete_per_node_settings($form_state['node']);
+  node_access_acquire_grants($form_state['node']);
+
+  // Corrected 'reseted' to 'reset'.
+  drupal_set_message(t('The permissions have been reset to the content type\'s defaults.'));
+}
+
+/**
+ * Custom menu access callback.
+ *
+ * Customized version of content_access's content_access_node_page_access
+ * menu access callback.  This version allows anyone with the
+ * 'grant own content access' permission and the update node access grant
+ * to edit a node's access control settings.
+ */
+function content_access_simpleui_content_access_node_page_access($node) {
+  global $user;
+  return content_access_get_settings('per_node', $node->type) && user_access('grant content access') ||
+  content_access_get_settings('per_node', $node->type) && (user_access('grant own content access') && ($user->uid == $node->uid)) ||
+  content_access_get_settings('per_node', $node->type) && (user_access('grant own content access') && node_access('update', $node));
+}

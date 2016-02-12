@@ -1,0 +1,16 @@
+form#content-access-page .content_access-div {
+  width: 33%;
+}
+
+form#content-access-page .form-checkboxes {
+  height: auto;
+  overflow-y: auto;
+  border: 1px solid #EFEFEF;
+  padding: 10px;
+  margin-right: 20px;
+  margin-top: 0;
+}
+
+form#content-access-page #edit-delete.form-checkboxes {
+  margin-right: 0;
+}
